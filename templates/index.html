@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>NAS Video Downloader</title>
+
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    }
+
+    body {
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 0 18px;
+      background: #111827;
+      color: #f9fafb;
+    }
+
+    .card {
+      padding: 24px;
+      margin-bottom: 20px;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 14px;
+    }
+
+    h1,
+    h2 {
+      margin-top: 0;
+    }
+
+    input[type="url"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 13px;
+      margin: 10px 0 14px;
+      color: #f9fafb;
+      background: #111827;
+      border: 1px solid #4b5563;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 12px 18px;
+      color: white;
+      background: #2563eb;
+      border: 0;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .error {
+      color: #fca5a5;
+      font-weight: 700;
+    }
+
+    .muted {
+      color: #9ca3af;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 11px;
+      border-bottom: 1px solid #374151;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    a {
+      color: #93c5fd;
+    }
+
+    .status {
+      display: inline-block;
+      min-width: 82px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .queued {
+      background: #78350f;
+      color: #fde68a;
+    }
+
+    .running {
+      background: #1e3a8a;
+      color: #bfdbfe;
+    }
+
+    .completed {
+      background: #14532d;
+      color: #bbf7d0;
+    }
+
+    .failed {
+      background: #7f1d1d;
+      color: #fecaca;
+    }
+
+    .url-cell {
+      max-width: 520px;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 720px) {
+      table,
+      thead,
+      tbody,
+      th,
+      td,
+      tr {
+        display: block;
+      }
+
+      thead {
+        display: none;
+      }
+
+      tr {
+        padding: 12px 0;
+        border-bottom: 1px solid #374151;
+      }
+
+      td {
+        padding: 5px 0;
+        border: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h1>NAS Video Downloader</h1>
+
+    <p class="muted">
+      Destination: {{ download_dir }}
+    </p>
+
+    <p class="muted">
+      Parallel downloads:
+      {{ max_concurrent_downloads }}
+    </p>
+
+    {% if error %}
+      <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <form
+      method="post"
+      action="/download"
+    >
+      <label for="url">
+        Video or playlist URL
+      </label>
+
+      <input
+        id="url"
+        name="url"
+        type="url"
+        required
+        autofocus
+        placeholder="https://www.youtube.com/watch?v=..."
+      >
+
+      <label>
+        <input
+          type="checkbox"
+          name="playlist"
+        >
+        Download the full playlist
+      </label>
+
+      <p>
+        <button type="submit">
+          Add to queue
+        </button>
+      </p>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Recent jobs</h2>
+
+    {% if jobs %}
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Queue</th>
+            <th>URL</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for job in jobs %}
+            <tr>
+              <td>
+                <span class="status {{ job.status }}">
+                  {{ job.status }}
+                </span>
+              </td>
+
+              <td>
+                {% if job.status == "queued" %}
+                  #{{ job.queue_position or "?" }}
+                {% elif job.status == "running" %}
+                  Worker {{ job.worker_number }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <td class="url-cell">
+                {{ job.url }}
+              </td>
+
+              <td>
+                <a href="/jobs/{{ job.id }}">
+                  View
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">
+        No jobs submitted since the service started.
+      </p>
+    {% endif %}
+  </div>
+</body>
+</html>

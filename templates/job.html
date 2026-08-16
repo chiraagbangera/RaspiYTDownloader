@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Download {{ job.id }}</title>
+
+  <style>
+    :root {
+      font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    }
+
+    body {
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 0 18px;
+      background: #111827;
+      color: #f9fafb;
+    }
+
+    .card {
+      padding: 22px;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 14px;
+    }
+
+    a {
+      color: #93c5fd;
+    }
+
+    .status {
+      font-weight: 800;
+    }
+
+    .url {
+      overflow-wrap: anywhere;
+    }
+
+    pre {
+      min-height: 420px;
+      max-height: 65vh;
+      padding: 16px;
+      overflow: auto;
+      white-space: pre-wrap;
+      background: #030712;
+      color: #d1d5db;
+      border-radius: 9px;
+    }
+  </style>
+</head>
+
+<body>
+  <p>
+    <a href="/">
+      ← Back to downloads
+    </a>
+  </p>
+
+  <div class="card">
+    <h1>Download job</h1>
+
+    <p class="url">
+      <strong>URL:</strong>
+      {{ job.url }}
+    </p>
+
+    <p>
+      <strong>Status:</strong>
+      <span
+        class="status"
+        id="status"
+      >
+        {{ job.status }}
+      </span>
+    </p>
+
+    <p id="queue-row">
+      <strong>Queue position:</strong>
+      <span id="queue-position">—</span>
+    </p>
+
+    <p>
+      <strong>Worker:</strong>
+      <span id="worker-number">—</span>
+    </p>
+
+    <pre id="log">Loading…</pre>
+  </div>
+
+  <script>
+    const jobId = {{ job.id | tojson }};
+
+    async function refresh() {
+      try {
+        const response = await fetch(
+          `/api/jobs/${jobId}`,
+          { cache: "no-store" }
+        );
+
+        const job = await response.json();
+
+        document
+          .getElementById("status")
+          .textContent = job.status;
+
+        document
+          .getElementById("queue-position")
+          .textContent =
+            job.queue_position ?? "—";
+
+        document
+          .getElementById("worker-number")
+          .textContent =
+            job.worker_number ?? "—";
+
+        const log = document.getElementById("log");
+        log.textContent = job.log.join("\n");
+        log.scrollTop = log.scrollHeight;
+
+        if (
+          job.status === "queued" ||
+          job.status === "running"
+        ) {
+          setTimeout(refresh, 1000);
+        }
+      } catch (error) {
+        document
+          .getElementById("log")
+          .textContent =
+            `Unable to read job status: ${error}`;
+
+        setTimeout(refresh, 3000);
+      }
+    }
+
+    refresh();
+  </script>
+</body>
+</html>
