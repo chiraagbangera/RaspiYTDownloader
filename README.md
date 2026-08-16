@@ -1,7 +1,6 @@
 # Raspberry Pi yt-dlp web downloader
 
-A LAN web interface that queues yt-dlp jobs and runs multiple downloads in
-parallel.
+A LAN web interface that queues yt-dlp jobs and runs multiple downloads in parallel (currently 2 worker threads).
 
 ## Features
 
@@ -37,6 +36,29 @@ Open:
 ```text
 http://RASPBERRY_PI_IP:100
 ```
+
+## Deploy from Visual Studio Code
+
+Set up SSH access once, replacing the hostname if necessary:
+
+```bash
+ssh-copy-id pi@raspberrypi.local
+```
+
+In Visual Studio Code, press `Ctrl+Shift+B` (`Cmd+Shift+B` on macOS), select
+**Deploy to Raspberry Pi**, and enter the Pi's SSH destination when prompted.
+The included task runs `deploy.sh`, which copies the project with `rsync`, runs
+the installer on the Pi, stops the existing service before replacing its files,
+and restarts the systemd service afterward.
+
+You can also deploy from a terminal:
+
+```bash
+PI_HOST=pi@192.168.1.100 ./deploy.sh
+```
+
+Both the computer and Pi must have `rsync` installed. The deploy task may ask
+for the Pi user's `sudo` password.
 
 ## Parallel download count
 

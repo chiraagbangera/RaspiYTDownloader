@@ -1,1 +1,44 @@
+# macOS
 .DS_Store
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and runtime files
+*.log
+*.pid
+
+# JetBrains IDEs
+.idea/
+*.iml
+
+# Visual Studio Code local settings; keep the deployment task in Git
+.vscode/*
+!.vscode/tasks.json
+
+# Build and package output
+build/
+dist/
+*.egg-info/
+
+# Temporary files
+*.tmp
+*.swp
+*~

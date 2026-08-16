@@ -29,6 +29,10 @@ case "$ARCHITECTURE" in
     ;;
 esac
 
+# Stop the existing instance before replacing application files. This is safe
+# on a first install, where the service does not exist yet.
+sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+
 sudo mkdir -p "$APP_DIR"
 
 sudo cp app.py "$APP_DIR/app.py"
@@ -84,7 +88,8 @@ sudo sed -i \
   "/etc/systemd/system/$SERVICE_NAME.service"
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now "$SERVICE_NAME"
+sudo systemctl enable "$SERVICE_NAME"
+sudo systemctl restart "$SERVICE_NAME"
 
 echo
 echo "Service status:"
