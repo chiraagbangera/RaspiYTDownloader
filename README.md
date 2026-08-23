@@ -121,6 +121,7 @@ service file:
 
 ```ini
 Environment=TEMP_DOWNLOAD_DIR=/path/on/pi
+Environment=TMPDIR=/path/on/pi
 ReadWritePaths=/mnt/nas/downloads /path/on/pi
 ```
 

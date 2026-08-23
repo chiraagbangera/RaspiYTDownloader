@@ -12,6 +12,8 @@ WorkingDirectory=/opt/pi-ytdlp-web
 
 Environment=DOWNLOAD_DIR=/mnt/Videos
 Environment=TEMP_DOWNLOAD_DIR=/var/tmp/ytdlp-web
+# Gunicorn needs a writable directory for its worker heartbeat file.
+Environment=TMPDIR=/var/tmp/ytdlp-web
 Environment=YTDLP_BIN=/usr/local/bin/yt-dlp
 Environment=MAX_CONCURRENT_DOWNLOADS=2
 Environment=MAX_LOG_LINES=500
@@ -26,7 +28,9 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 
-PrivateTmp=true
+# TEMP_DOWNLOAD_DIR is an explicit Pi-local working directory. Do not enable
+# PrivateTmp here because it hides /var/tmp/ytdlp-web before ReadWritePaths is
+# applied and prevents systemd from starting the service.
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/mnt/Videos /var/tmp/ytdlp-web

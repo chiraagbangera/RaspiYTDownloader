@@ -1,5 +1,6 @@
 import os
 import queue
+import re
 import subprocess
 import threading
 import uuid
@@ -10,6 +11,8 @@ from urllib.parse import urlparse
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 app = Flask(__name__)
+
+APP_NAME = "YouTube Video Downloader"
 
 DOWNLOAD_DIR = Path(
     os.environ.get("DOWNLOAD_DIR", "/mnt/nas/downloads")
@@ -86,6 +89,14 @@ def append_log(job_id: str, line: str) -> None:
             job["log"] = job["log"][-MAX_LOG_LINES:]
 
 
+def update_job(job_id: str, **updates) -> None:
+    with jobs_lock:
+        job = jobs.get(job_id)
+
+        if job is not None:
+            job.update(updates)
+
+
 def get_queue_position(job_id: str) -> int | None:
     """
     Returns a 1-based queue position for queued jobs.
@@ -106,7 +117,20 @@ def build_command(job: dict) -> list[str]:
     command = [
         YTDLP_BIN,
         "--newline",
+        "--print",
+        "before_dl:__YTDLP_TITLE__|%(title)s",
+        "--print",
+        "after_move:__YTDLP_OUTPUT__|%(filepath)s",
         "--progress",
+        "--progress-template",
+        (
+            "download:__YTDLP_PROGRESS__|"
+            "%(progress._percent_str)s|"
+            "%(progress._downloaded_bytes_str)s|"
+            "%(progress._total_bytes_str)s|"
+            "%(progress._speed_str)s|"
+            "%(progress._eta_str)s"
+        ),
         "--continue",
         "--no-overwrites",
         "--restrict-filenames",
@@ -140,9 +164,10 @@ def download_worker(worker_number: int) -> None:
                 if job is None:
                     continue
 
-                job["status"] = "running"
+                job["status"] = "downloading"
                 job["worker_number"] = worker_number
                 job["started_at"] = utc_now()
+                job["message"] = "Downloading to temporary storage"
 
             DOWNLOAD_DIR.mkdir(
                 parents=True,
@@ -183,6 +208,53 @@ def download_worker(worker_number: int) -> None:
             for line in process.stdout:
                 append_log(job_id, line)
 
+                stripped = line.strip()
+
+                if stripped.startswith("__YTDLP_PROGRESS__|"):
+                    parts = stripped.split("|", 5)
+                    percent_text = parts[1] if len(parts) > 1 else ""
+                    match = re.search(r"[\d.]+", percent_text)
+                    progress = float(match.group()) if match else 0.0
+                    update_job(
+                        job_id,
+                        status="downloading",
+                        message="Downloading to temporary storage",
+                        progress=min(100.0, max(0.0, progress)),
+                        downloaded_size=parts[2].strip() if len(parts) > 2 else "",
+                        total_size=parts[3].strip() if len(parts) > 3 else "",
+                        speed=parts[4].strip() if len(parts) > 4 else "",
+                        eta=parts[5].strip() if len(parts) > 5 else "",
+                    )
+                elif stripped.startswith("__YTDLP_OUTPUT__|"):
+                    output_path = stripped.split("|", 1)[1]
+                    output_file = Path(output_path)
+                    update_job(
+                        job_id,
+                        output_path=output_path,
+                        output_bytes=(
+                            output_file.stat().st_size
+                            if output_file.exists()
+                            else None
+                        ),
+                    )
+                elif stripped.startswith("__YTDLP_TITLE__|"):
+                    update_job(
+                        job_id,
+                        title=stripped.split("|", 1)[1],
+                    )
+                elif stripped.startswith("[MoveFiles]"):
+                    update_job(
+                        job_id,
+                        status="moving",
+                        message="Moving completed file to NAS",
+                    )
+                elif stripped.startswith(("[Merger]", "[VideoRemuxer]", "[Fixup")):
+                    update_job(
+                        job_id,
+                        status="processing",
+                        message="Merging and processing locally",
+                    )
+
             return_code = process.wait()
 
             with jobs_lock:
@@ -195,6 +267,13 @@ def download_worker(worker_number: int) -> None:
                         if return_code == 0
                         else "failed"
                     )
+                    current_job["message"] = (
+                        "Completed"
+                        if return_code == 0
+                        else f"yt-dlp exited with code {return_code}"
+                    )
+                    if return_code == 0:
+                        current_job["progress"] = 100.0
                     current_job["finished_at"] = utc_now()
                     current_job["process_id"] = None
 
@@ -209,6 +288,7 @@ def download_worker(worker_number: int) -> None:
 
                 if current_job is not None:
                     current_job["status"] = "failed"
+                    current_job["message"] = str(exc)
                     current_job["finished_at"] = utc_now()
                     current_job["process_id"] = None
 
@@ -249,8 +329,10 @@ def index():
 
     return render_template(
         "index.html",
+        app_name=APP_NAME,
         jobs=recent_jobs,
         download_dir=str(DOWNLOAD_DIR),
+        temp_download_dir=str(TEMP_DOWNLOAD_DIR),
         max_concurrent_downloads=MAX_CONCURRENT_DOWNLOADS,
     )
 
@@ -267,8 +349,10 @@ def download():
         return (
             render_template(
                 "index.html",
+                app_name=APP_NAME,
                 jobs=recent_jobs,
                 download_dir=str(DOWNLOAD_DIR),
+                temp_download_dir=str(TEMP_DOWNLOAD_DIR),
                 max_concurrent_downloads=MAX_CONCURRENT_DOWNLOADS,
                 error=(
                     "Enter a valid http:// or https:// URL."
@@ -290,6 +374,15 @@ def download():
         "return_code": None,
         "worker_number": None,
         "process_id": None,
+        "message": "Queued",
+        "title": None,
+        "progress": 0.0,
+        "downloaded_size": "",
+        "total_size": "",
+        "speed": "",
+        "eta": "",
+        "output_path": None,
+        "output_bytes": None,
         "log": [],
     }
 
@@ -298,12 +391,7 @@ def download():
 
     job_queue.put(job_id)
 
-    return redirect(
-        url_for(
-            "job_page",
-            job_id=job_id,
-        )
-    )
+    return redirect(url_for("index", queued=job_id))
 
 
 @app.get("/jobs/<job_id>")
@@ -364,9 +452,27 @@ def all_jobs():
 
     return jsonify(
         {
+            "app_name": APP_NAME,
             "max_concurrent_downloads":
                 MAX_CONCURRENT_DOWNLOADS,
+            "download_dir": str(DOWNLOAD_DIR),
+            "temp_download_dir": str(TEMP_DOWNLOAD_DIR),
             "jobs": result,
+        }
+    )
+
+
+@app.get("/api/health")
+def health():
+    ytdlp_exists = Path(YTDLP_BIN).exists()
+
+    return jsonify(
+        {
+            "ok": ytdlp_exists,
+            "yt_dlp": YTDLP_BIN,
+            "yt_dlp_exists": ytdlp_exists,
+            "download_dir": str(DOWNLOAD_DIR),
+            "temp_download_dir": str(TEMP_DOWNLOAD_DIR),
         }
     )
 
