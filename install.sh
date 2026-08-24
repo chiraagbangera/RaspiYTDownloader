@@ -4,30 +4,13 @@ set -euo pipefail
 APP_DIR="/opt/pi-ytdlp-web"
 SERVICE_NAME="ytdlp-web"
 SERVICE_USER="${SUDO_USER:-pi}"
-ARCHITECTURE="$(uname -m)"
 
 sudo apt update
 
 sudo apt install -y \
   python3 \
   python3-venv \
-  ffmpeg \
-  curl \
-  unzip
-
-case "$ARCHITECTURE" in
-  aarch64|arm64)
-    YTDLP_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64"
-    ;;
-  x86_64|amd64)
-    YTDLP_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
-    ;;
-  *)
-    echo "Unsupported prebuilt yt-dlp architecture: $ARCHITECTURE"
-    echo "Installing yt-dlp inside the Python virtual environment instead."
-    YTDLP_URL=""
-    ;;
-esac
+  ffmpeg
 
 # Stop the existing instance before replacing application files. This is safe
 # on a first install, where the service does not exist yet.
@@ -49,6 +32,11 @@ sudo chown \
   "$SERVICE_USER:$SERVICE_USER" \
   /var/tmp/ytdlp-web
 
+# Create the dedicated library folder on the mounted NAS. If the service user
+# cannot create it, the app health check will report the mount as unavailable.
+sudo -u "$SERVICE_USER" \
+  mkdir -p "/mnt/Videos/Youtube Videos"
+
 if [ ! -d "$APP_DIR/.venv" ]; then
   sudo -u "$SERVICE_USER" \
     python3 -m venv "$APP_DIR/.venv"
@@ -60,24 +48,14 @@ sudo -u "$SERVICE_USER" \
 
 sudo -u "$SERVICE_USER" \
   "$APP_DIR/.venv/bin/pip" \
-  install -r "$APP_DIR/requirements.txt"
+  install --upgrade -r "$APP_DIR/requirements.txt"
 
-if [ -n "$YTDLP_URL" ]; then
-  sudo curl -L \
-    "$YTDLP_URL" \
-    -o /usr/local/bin/yt-dlp
-
-  sudo chmod 0755 \
-    /usr/local/bin/yt-dlp
-else
-  sudo -u "$SERVICE_USER" \
-    "$APP_DIR/.venv/bin/pip" \
-    install --upgrade yt-dlp
-
-  sudo ln -sf \
-    "$APP_DIR/.venv/bin/yt-dlp" \
-    /usr/local/bin/yt-dlp
-fi
+# Use the Python entry point from the app virtual environment. Unlike the
+# PyInstaller one-file release, this does not need to unpack itself into a
+# temporary directory before every command.
+sudo ln -sf \
+  "$APP_DIR/.venv/bin/yt-dlp" \
+  /usr/local/bin/yt-dlp
 
 sudo cp \
   ytdlp-web.service \

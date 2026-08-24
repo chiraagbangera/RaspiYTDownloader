@@ -10,13 +10,16 @@ User=pi
 Group=pi
 WorkingDirectory=/opt/pi-ytdlp-web
 
-Environment=DOWNLOAD_DIR=/mnt/Videos
+Environment="DOWNLOAD_DIR=/mnt/Videos/Youtube Videos"
 Environment=TEMP_DOWNLOAD_DIR=/var/tmp/ytdlp-web
+Environment="NAS_TEMP_DOWNLOAD_DIR=/mnt/Videos/Youtube Videos/.ytdlp-temp"
 # Gunicorn needs a writable directory for its worker heartbeat file.
 Environment=TMPDIR=/var/tmp/ytdlp-web
-Environment=YTDLP_BIN=/usr/local/bin/yt-dlp
+Environment=YTDLP_BIN=/opt/pi-ytdlp-web/.venv/bin/yt-dlp
 Environment=MAX_CONCURRENT_DOWNLOADS=2
 Environment=MAX_LOG_LINES=500
+Environment=LOCAL_FREE_RESERVE_BYTES=536870912
+Environment=LOCAL_SPACE_MULTIPLIER=2.0
 
 ExecStart=/opt/pi-ytdlp-web/.venv/bin/gunicorn --workers 1 --threads 4 --bind 0.0.0.0:100 --access-logfile - --error-logfile - app:app
 

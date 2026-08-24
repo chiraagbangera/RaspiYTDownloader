@@ -11,9 +11,13 @@ A LAN web interface that queues yt-dlp jobs and runs multiple downloads in paral
 - Per-download live logs
 - Playlist option
 - MKV output
-- Pi-local temporary downloads and merges
-- NAS destination
+- Automatic Pi-local or direct-to-NAS downloads based on free space
+- Dedicated NAS `Youtube Videos` library
 - Starts automatically with systemd
+
+yt-dlp is installed inside the app's Python virtual environment. This avoids
+the temporary self-extraction required by its PyInstaller one-file release,
+which can fail on space-constrained or hardened Raspberry Pi installations.
 
 ## Codec policy
 
@@ -95,20 +99,30 @@ Gunicorn processes would create multiple independent queues.
 Default:
 
 ```text
-/mnt/nas/downloads
+/mnt/Videos/Youtube Videos
 ```
 
-Change both entries in the service file:
+The app and installer create this folder automatically on the mounted NAS.
+To use another location, change these entries in the service file:
 
 ```ini
-Environment=DOWNLOAD_DIR=/mnt/nas/downloads
-ReadWritePaths=/mnt/nas/downloads /var/tmp/ytdlp-web
+Environment="DOWNLOAD_DIR=/your/nas/Youtube Videos"
+Environment="NAS_TEMP_DOWNLOAD_DIR=/your/nas/Youtube Videos/.ytdlp-temp"
+ReadWritePaths=/your/nas /var/tmp/ytdlp-web
 ```
 
 ## Temporary download directory
 
-Downloads, fragments, and ffmpeg merges are written to the Pi's local storage
-first. yt-dlp moves only the completed file to the NAS destination.
+Before each job, yt-dlp performs a metadata-only probe for the selected video
+and audio formats. The app uses Pi-local storage only when there is enough free
+space for twice the estimated media size plus a 512 MiB reserve. The extra
+headroom covers the separate video/audio streams and ffmpeg merge output.
+
+If that safe reservation cannot be made, or YouTube does not report a usable
+size, the download, fragments, and merge run directly in the hidden
+`.ytdlp-temp` folder on the NAS. The completed MKV is then placed in
+`Youtube Videos`. Concurrent workers share the reservation calculation so two
+jobs cannot both claim the same Pi space.
 
 The default local temporary directory is:
 
@@ -122,17 +136,28 @@ service file:
 ```ini
 Environment=TEMP_DOWNLOAD_DIR=/path/on/pi
 Environment=TMPDIR=/path/on/pi
-ReadWritePaths=/mnt/nas/downloads /path/on/pi
+ReadWritePaths=/mnt/Videos /path/on/pi
 ```
 
 Make sure the service user can write to that directory, then reload and restart
 the service.
+
+The thresholds are configurable in `ytdlp-web.service`:
+
+```ini
+Environment=LOCAL_FREE_RESERVE_BYTES=536870912
+Environment=LOCAL_SPACE_MULTIPLIER=2.0
+```
 
 ## Logs
 
 ```bash
 sudo journalctl -u ytdlp-web -f
 ```
+
+The health indicator runs `yt-dlp --version`, so a corrupt or unusable yt-dlp
+installation is reported instead of appearing healthy merely because the file
+exists.
 
 ## Security
 

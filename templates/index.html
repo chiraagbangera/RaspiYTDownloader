@@ -4,184 +4,122 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#10100f">
   <title>{{ app_name }}</title>
   <style>
-    :root { color-scheme:dark; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; --bg:#0b0d10; --panel:#15181d; --panel2:#101318; --border:#2a3039; --text:#f2f4f7; --muted:#9aa4b2; --accent:#78a9ff; --ok:#63d392; --warn:#f2c46d; --bad:#f17b7b; }
+    :root {
+      color-scheme: dark;
+      --bg:#10100f; --surface:#191917; --raised:#20201d; --soft:#25241f;
+      --line:#34332e; --line-strong:#48463e; --text:#f5f2e8;
+      --muted:#a8a398; --faint:#706c63; --lime:#c9ff5a; --lime-ink:#182000;
+      --blue:#85b7ff; --orange:#ffbd66; --red:#ff8074; --green:#77db9b;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    }
     * { box-sizing:border-box; }
-    body { margin:0; background:var(--bg); color:var(--text); }
-    main { max-width:1180px; margin:0 auto; padding:28px 20px 60px; }
-    h1 { margin:0; font-size:clamp(28px,5vw,42px); letter-spacing:-.035em; }
-    h2 { margin:0; font-size:18px; }
-    p { line-height:1.5; }
-    code { overflow-wrap:anywhere; }
-    a { color:var(--accent); }
-    .lead { color:var(--muted); margin:8px 0 0; max-width:800px; }
-    .row { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
-    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:20px 0; }
-    .metric,.card { background:var(--panel); border:1px solid var(--border); border-radius:14px; }
-    .metric { padding:14px; min-height:84px; }
-    .metric .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
-    .metric .value { margin-top:6px; font-weight:700; overflow-wrap:anywhere; }
-    .card { padding:18px; margin-top:14px; }
-    form { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:9px; margin-top:14px; }
-    input,button { font:inherit; border:1px solid var(--border); border-radius:9px; padding:11px 12px; }
-    input { background:var(--panel2); color:var(--text); min-width:0; }
-    button { background:var(--text); color:#111; font-weight:750; cursor:pointer; }
-    button:hover { opacity:.92; }
-    .form-options { grid-column:1/-1; color:var(--muted); font-size:13px; }
-    .form-options label { display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
-    .hint { margin:10px 0 0; color:var(--muted); font-size:13px; }
-    .section-title { display:flex; align-items:center; gap:9px; }
-    .count { min-width:24px; height:24px; padding:0 7px; display:inline-grid; place-items:center; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:12px; }
-    .jobs { display:grid; gap:10px; margin-top:12px; }
-    .job { background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:14px; }
-    .job-title { font-weight:750; overflow-wrap:anywhere; }
-    .source { color:var(--muted); font-size:12px; margin-top:4px; overflow-wrap:anywhere; }
-    .status { font-size:11px; text-transform:uppercase; letter-spacing:.09em; border:1px solid var(--border); border-radius:999px; padding:5px 8px; }
-    .status.completed { color:var(--ok); }
-    .status.failed { color:var(--bad); }
-    .status.downloading,.status.processing,.status.moving { color:var(--accent); }
-    .status.queued { color:var(--warn); }
-    .progress { height:9px; background:#292e36; border-radius:999px; overflow:hidden; margin:12px 0 7px; }
-    .progress>div { height:100%; background:var(--accent); width:0; transition:width .35s ease; }
-    .meta { display:flex; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:12px; }
-    .message { margin-top:7px; font-size:13px; }
-    details { margin-top:9px; }
-    summary { cursor:pointer; color:var(--muted); font-size:12px; }
-    pre { white-space:pre-wrap; word-break:break-word; max-height:280px; overflow:auto; background:#090b0e; border:1px solid #20252c; padding:10px; border-radius:8px; font-size:12px; }
-    .empty { color:var(--muted); padding:14px 2px; }
-    .notice { display:none; margin-top:12px; padding:10px 12px; border:1px solid var(--border); border-radius:9px; }
-    .notice.show { display:block; }
-    .notice.error { color:var(--bad); }
-    .notice.ok { color:var(--ok); }
-    .health { font-size:12px; color:var(--muted); }
-    .health.good { color:var(--ok); }
-    .health.bad { color:var(--bad); }
-    @media (max-width:900px) { .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } form { grid-template-columns:1fr; } .form-options { grid-column:1; } }
-    @media (max-width:520px) { main { padding:20px 14px 50px; } .grid { grid-template-columns:1fr; } }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); }
+    button,input { font:inherit; } a { color:inherit; } code { font-family:"SFMono-Regular",Consolas,monospace; }
+    .shell { max-width:1240px; margin:0 auto; padding:24px 22px 72px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:42px; }
+    .brand { display:flex; align-items:center; gap:12px; font-size:15px; font-weight:760; letter-spacing:-.01em; }
+    .brand-mark { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; background:var(--lime); color:var(--lime-ink); font-size:17px; box-shadow:0 0 28px rgba(201,255,90,.12); }
+    .health { display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; }
+    .health::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--faint); }
+    .health.good::before { background:var(--green); box-shadow:0 0 0 4px rgba(119,219,155,.1); }
+    .health.bad { color:var(--red); } .health.bad::before { background:var(--red); }
+    .hero { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr); align-items:end; gap:48px; margin-bottom:28px; }
+    .eyebrow { margin-bottom:11px; color:var(--lime); text-transform:uppercase; letter-spacing:.14em; font-size:11px; font-weight:800; }
+    h1 { max-width:720px; margin:0; font-size:clamp(38px,6vw,68px); line-height:.98; letter-spacing:-.055em; font-weight:720; }
+    .hero-copy { margin:0 0 4px; max-width:450px; color:var(--muted); font-size:14px; line-height:1.65; }
+    .panel { overflow:hidden; background:var(--surface); border:1px solid var(--line); border-radius:18px; }
+    .composer { padding:12px; overflow:visible; box-shadow:0 26px 70px rgba(0,0,0,.18); }
+    .url-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:9px; }
+    .url-wrap { display:flex; align-items:center; gap:11px; min-width:0; padding:0 16px; background:#121211; border:1px solid var(--line); border-radius:12px; }
+    .url-wrap:focus-within { border-color:var(--line-strong); box-shadow:0 0 0 3px rgba(201,255,90,.06); }
+    .url-icon { color:var(--faint); font-size:17px; }
+    #downloadUrl { width:100%; height:54px; min-width:0; padding:0; color:var(--text); background:transparent; border:0; outline:0; }
+    #downloadUrl::placeholder { color:#67635b; }
+    .primary { min-height:54px; padding:0 22px; border:0; border-radius:12px; background:var(--lime); color:var(--lime-ink); font-weight:800; cursor:pointer; }
+    .primary:hover { background:#d6ff7d; }
+    .composer-options { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:11px 5px 1px; color:var(--muted); font-size:12px; }
+    .toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none; } .toggle input { accent-color:var(--lime); }
+    .destination-line { display:inline-flex; align-items:center; min-width:0; max-width:62%; gap:7px; color:var(--muted); }
+    .destination-line code { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    .notice { display:none; margin:10px 4px 0; padding:10px 12px; border-radius:9px; font-size:12px; }
+    .notice.show { display:block; } .notice.error { color:var(--red); background:rgba(255,128,116,.08); } .notice.ok { color:var(--green); background:rgba(119,219,155,.08); }
+    .workspace { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(315px,.65fr); align-items:start; gap:16px; margin-top:16px; }
+    .column { display:grid; gap:16px; }
+    .section-head { min-height:62px; display:flex; justify-content:space-between; align-items:center; gap:16px; padding:0 18px; border-bottom:1px solid var(--line); }
+    .section-heading { display:flex; align-items:center; gap:10px; } h2 { margin:0; font-size:15px; letter-spacing:-.01em; }
+    .count { display:inline-grid; place-items:center; min-width:23px; height:23px; padding:0 7px; border-radius:99px; background:var(--soft); color:var(--muted); font-size:11px; }
+    .summary { color:var(--faint); font-size:11px; } .jobs { min-height:90px; }
+    .job { padding:16px 18px; border-bottom:1px solid var(--line); } .job:last-child { border-bottom:0; }
+    .job-top { display:flex; align-items:flex-start; gap:14px; }
+    .file-icon { flex:0 0 auto; width:38px; height:42px; display:grid; place-items:center; border:1px solid var(--line); border-radius:9px; background:var(--raised); color:var(--muted); font-size:10px; font-weight:800; text-transform:uppercase; }
+    .job-main { flex:1; min-width:0; } .job-name { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; font-weight:700; }
+    .job-url { display:block; margin-top:4px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--faint); font-size:11px; text-decoration:none; } .job-url:hover { color:var(--blue); }
+    .status { flex:0 0 auto; padding:5px 7px; border-radius:6px; background:var(--soft); color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-size:9px; font-weight:800; }
+    .status.preparing,.status.downloading,.status.processing,.status.moving { color:var(--blue); } .status.queued { color:var(--orange); } .status.completed { color:var(--green); } .status.failed { color:var(--red); }
+    .progress-line { height:5px; margin:14px 0 9px 52px; overflow:hidden; background:#2a2925; border-radius:99px; }
+    .progress-line div { height:100%; border-radius:inherit; background:var(--lime); transition:width .3s ease; }
+    .progress-line.indeterminate div { width:34%!important; animation:scan 1.4s ease-in-out infinite; } @keyframes scan { from { transform:translateX(-110%); } to { transform:translateX(310%); } }
+    .job-meta { display:flex; flex-wrap:wrap; align-items:center; gap:8px 15px; margin:10px 0 0 52px; color:var(--muted); font-size:11px; }
+    .job-message { color:var(--muted); } .storage-mode { display:inline-flex; align-items:center; gap:5px; color:var(--faint); }
+    details { margin:10px 0 0 52px; } summary { color:var(--faint); font-size:10px; cursor:pointer; }
+    pre { max-height:240px; margin:8px 0 0; padding:11px; overflow:auto; white-space:pre-wrap; word-break:break-word; border:1px solid var(--line); border-radius:9px; background:#0e0e0d; color:var(--muted); font-size:10px; }
+    .empty { display:grid; place-items:center; min-height:94px; padding:18px; color:var(--faint); font-size:12px; text-align:center; }
+    .storage-card { padding:17px 18px; } .storage-label { color:var(--faint); font-size:10px; text-transform:uppercase; letter-spacing:.11em; }
+    .storage-path { margin-top:8px; overflow-wrap:anywhere; color:var(--muted); font-size:11px; line-height:1.5; } .storage-separator { height:1px; margin:15px 0; background:var(--line); }
+    .storage-grid { display:grid; grid-template-columns:1fr auto; gap:8px 14px; font-size:11px; } .storage-grid span { color:var(--faint); }
+    .legal { margin:18px 2px 0; color:var(--faint); font-size:10px; }
+    @media (max-width:860px) { .hero { grid-template-columns:1fr; gap:18px; } .hero-copy { max-width:680px; } .workspace { grid-template-columns:1fr; } }
+    @media (max-width:600px) { .shell { padding:18px 13px 55px; } .topbar { margin-bottom:30px; } .health span { display:none; } h1 { font-size:42px; } .url-row { grid-template-columns:1fr; } .primary { width:100%; } .composer-options { align-items:flex-start; flex-direction:column; } .destination-line { max-width:100%; } .section-head { align-items:flex-start; padding:15px; flex-direction:column; } .job { padding-left:14px; padding-right:14px; } .job-meta,.progress-line,details { margin-left:0; } }
   </style>
 </head>
 <body>
-<main>
-  <header>
-    <div class="row">
-      <div>
-        <h1>{{ app_name }}</h1>
-        <p class="lead">Paste a YouTube video or playlist URL. The Pi downloads and merges it in local temporary storage, then moves only the completed MKV to the NAS.</p>
-      </div>
-      <div id="health" class="health">Checking service…</div>
-    </div>
-  </header>
-
-  <div class="grid">
-    <div class="metric"><div class="label">NAS destination</div><div class="value"><code>{{ download_dir }}</code></div></div>
-    <div class="metric"><div class="label">Temporary storage</div><div class="value"><code>{{ temp_download_dir }}</code></div></div>
-    <div class="metric"><div class="label">Concurrency</div><div class="value">{{ max_concurrent_downloads }} workers</div></div>
-  </div>
-
-  <section class="card">
-    <h2>Add download</h2>
+<main class="shell">
+  <header class="topbar"><div class="brand"><span class="brand-mark">▶</span><span>{{ app_name }}</span></div><div id="health" class="health"><span>Checking NAS…</span></div></header>
+  <section class="hero">
+    <div><div class="eyebrow">Raspberry Pi video manager</div><h1>Paste a video.<br>Let the Pi handle it.</h1></div>
+    <p class="hero-copy">YouTube videos use fast Pi storage when there is enough room. Larger or unknown-size downloads automatically run straight on the NAS, without filling the Pi.</p>
+  </section>
+  <section class="panel composer" aria-label="Add a YouTube download">
     <form method="post" action="/download">
-      <input id="downloadUrl" name="url" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" required autofocus>
-      <button type="submit">Add to queue</button>
-      <div class="form-options"><label><input type="checkbox" name="playlist"> Download the full playlist</label></div>
+      <div class="url-row"><label class="url-wrap" for="downloadUrl"><span class="url-icon">↗</span><input id="downloadUrl" name="url" type="url" placeholder="Paste a YouTube video or playlist URL" autocomplete="off" required autofocus></label><button class="primary" type="submit">Add to queue</button></div>
+      <div class="composer-options"><label class="toggle"><input type="checkbox" name="playlist"> Download the full playlist</label><span class="destination-line" title="{{ download_dir }}"><span>⌁</span><code>{{ download_dir }}</code></span></div>
     </form>
-    <div class="hint">HDR uses AV1. SDR prefers H.265 and falls back to H.264. Output is merged as MKV.</div>
     <div id="notice" class="notice{% if error %} show error{% endif %}">{% if error %}{{ error }}{% endif %}</div>
   </section>
-
-  <section class="card">
-    <div class="row"><div class="section-title"><h2>Active</h2><span id="activeCount" class="count">0</span></div><span id="summary" class="hint" style="margin:0">Loading…</span></div>
-    <div id="activeJobs" class="jobs"></div>
-  </section>
-  <section class="card">
-    <div class="section-title"><h2>Queued</h2><span id="queuedCount" class="count">0</span></div>
-    <div id="queuedJobs" class="jobs"></div>
-  </section>
-  <section class="card">
-    <div class="section-title"><h2>Recent</h2><span id="recentCount" class="count">0</span></div>
-    <div id="recentJobs" class="jobs"></div>
-  </section>
-  <p class="hint">Use only with videos you are authorized to save. This service is intended for a trusted LAN.</p>
+  <div class="workspace">
+    <div class="column">
+      <section class="panel"><div class="section-head"><div class="section-heading"><h2>In progress</h2><span id="activeCount" class="count">0</span></div><span id="activeSummary" class="summary">Waiting for jobs</span></div><div id="activeJobs" class="jobs"></div></section>
+      <section class="panel"><div class="section-head"><div class="section-heading"><h2>Queue</h2><span id="queuedCount" class="count">0</span></div><span class="summary">Size is checked when a worker starts</span></div><div id="queuedJobs" class="jobs"></div></section>
+    </div>
+    <div class="column">
+      <section class="panel"><div class="section-head"><div class="section-heading"><h2>Recent</h2><span id="recentCount" class="count">0</span></div></div><div id="recentJobs" class="jobs"></div></section>
+      <aside class="panel storage-card"><div class="storage-label">YouTube library</div><div class="storage-path">{{ download_dir }}</div><div class="storage-separator"></div><div class="storage-grid"><span>Preferred workspace</span><strong>Pi local</strong><span>Large / unknown videos</span><strong>Direct to NAS</strong><span>Merge headroom</span><strong>{{ local_space_multiplier|round(1) }}× media size</strong><span>Parallel downloads</span><strong>{{ max_concurrent_downloads }}</strong></div></aside>
+    </div>
+  </div>
+  <p class="legal">Use only with videos you are authorized to save. This service is intended for a trusted LAN.</p>
 </main>
-
 <script>
-function fmtBytes(bytes) {
-  if (bytes == null) return "";
-  const units=["B","KB","MB","GB","TB"];
-  let value=Number(bytes), i=0;
-  while (value>=1024 && i<units.length-1) { value/=1024; i++; }
-  return `${value.toFixed(i>=2?2:1)} ${units[i]}`;
-}
-function esc(value) {
-  return String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
-}
+const $ = id => document.getElementById(id);
+function esc(value) { return String(value ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
+function fmtBytes(bytes) { if(bytes==null||Number.isNaN(Number(bytes)))return ""; const units=["B","KB","MB","GB","TB"]; let value=Number(bytes),index=0; while(value>=1024&&index<units.length-1){value/=1024;index++;} return `${value.toFixed(index>1?1:0)} ${units[index]}`; }
+function shortMode(job) { if(job.storage_mode==="pi_local")return "Pi local → NAS"; if(job.storage_mode==="nas_direct")return "Direct to NAS"; return "Storage pending"; }
 function jobHtml(job) {
-  const percent=Number(job.progress||0);
-  const queueText=job.queue_position?`Queue #${job.queue_position}`:"";
-  const log=(job.log||[]).slice(-100).join("\n");
-  const active=["downloading","processing","moving"].includes(job.status);
-  const hasProgress=active||job.status==="completed";
-  const reportedSize=job.total_size!=="NA"?job.total_size:"";
-  const downloadedSize=job.downloaded_size!=="NA"?job.downloaded_size:"";
-  const size=reportedSize||downloadedSize||(job.output_bytes?fmtBytes(job.output_bytes):"");
-  const title=job.output_path?job.output_path.split("/").pop():(job.title||(job.playlist?"YouTube playlist":"YouTube video"));
-  return `<article class="job" data-job-id="${esc(job.id)}">
-    <div class="row"><div style="min-width:0;flex:1"><div class="job-title">${esc(title)}</div><div class="source"><a href="${esc(job.url)}" target="_blank" rel="noreferrer">${esc(job.url)}</a></div></div><div class="status ${esc(job.status)}">${esc(job.status)}</div></div>
-    ${hasProgress?`<div class="progress"><div style="width:${Math.min(100,Math.max(0,percent))}%"></div></div>`:""}
-    <div class="meta">${hasProgress?`<span>${percent.toFixed(1)}%</span>`:""}${size?`<span>${esc(size)}</span>`:""}${job.speed&&job.speed!=="NA"?`<span>${esc(job.speed)}</span>`:""}${job.eta&&job.eta!=="NA"?`<span>ETA ${esc(job.eta)}</span>`:""}${queueText?`<span>${esc(queueText)}</span>`:""}${job.worker_number?`<span>Worker ${job.worker_number}</span>`:""}${job.playlist?`<span>Playlist</span>`:""}</div>
-    ${job.message?`<div class="message">${esc(job.message)}</div>`:""}
-    ${job.output_path?`<div class="source"><code>${esc(job.output_path)}</code></div>`:""}
-    <details><summary>Log</summary><pre>${esc(log)}</pre></details>
-  </article>`;
+  const active=["preparing","downloading","processing","moving"].includes(job.status), percent=Math.min(100,Math.max(0,Number(job.progress||0)));
+  const fileName=job.output_path?job.output_path.split("/").pop():(job.title||(job.playlist?"YouTube playlist":"YouTube video"));
+  const size=(job.total_size&&job.total_size!=="NA")?job.total_size:((job.downloaded_size&&job.downloaded_size!=="NA")?job.downloaded_size:fmtBytes(job.output_bytes||job.estimated_bytes));
+  const queuePosition=job.queue_position?`Queue #${job.queue_position}`:"", indeterminate=job.status==="preparing", log=(job.log||[]).slice(-100).join("\n");
+  return `<article class="job" data-job-id="${esc(job.id)}"><div class="job-top"><div class="file-icon">${job.playlist?"list":"mkv"}</div><div class="job-main"><div class="job-name" title="${esc(fileName)}">${esc(fileName)}</div><a class="job-url" href="${esc(job.url)}" target="_blank" rel="noreferrer">${esc(job.url)}</a></div><span class="status ${esc(job.status)}">${esc(job.status)}</span></div>${active||job.status==="completed"?`<div class="progress-line ${indeterminate?"indeterminate":""}"><div style="width:${percent}%"></div></div>`:""}<div class="job-meta">${active&&!indeterminate?`<span>${percent.toFixed(1)}%</span>`:""}${size?`<span>${esc(size)}</span>`:""}${job.speed&&job.speed!=="NA"?`<span>${esc(job.speed)}</span>`:""}${job.eta&&job.eta!=="NA"?`<span>ETA ${esc(job.eta)}</span>`:""}${queuePosition?`<span>${esc(queuePosition)}</span>`:""}<span class="job-message">${esc(job.message||"")}</span><span class="storage-mode">⌁ ${esc(shortMode(job))}</span></div>${log?`<details><summary>Activity log</summary><pre>${esc(log)}</pre></details>`:""}</article>`;
 }
-function setSection(id,countId,jobs) {
-  document.getElementById(countId).textContent=jobs.length;
-  document.getElementById(id).innerHTML=jobs.length?jobs.map(jobHtml).join(""):'<div class="empty">Nothing here.</div>';
-}
-function openLogJobIds() {
-  return new Set([...document.querySelectorAll("article.job details[open]")].map(details=>details.closest("article.job")?.dataset.jobId).filter(Boolean));
-}
-function restoreOpenLogs(openIds) {
-  for (const article of document.querySelectorAll("article.job")) {
-    if (!openIds.has(article.dataset.jobId)) continue;
-    const details=article.querySelector("details");
-    if (details) details.open=true;
-  }
-}
-async function refreshJobs() {
-  try {
-    const openLogs=openLogJobIds();
-    const response=await fetch("/api/jobs",{cache:"no-store"});
-    const data=await response.json();
-    const jobs=data.jobs||[];
-    const active=jobs.filter(job=>["downloading","processing","moving","running"].includes(job.status));
-    const queued=jobs.filter(job=>job.status==="queued").sort((a,b)=>(a.queue_position||9999)-(b.queue_position||9999));
-    const recent=jobs.filter(job=>["completed","failed"].includes(job.status));
-    setSection("activeJobs","activeCount",active);
-    setSection("queuedJobs","queuedCount",queued);
-    setSection("recentJobs","recentCount",recent);
-    restoreOpenLogs(openLogs);
-    document.getElementById("summary").textContent=`${active.length} active · ${queued.length} queued · ${recent.length} recent`;
-  } catch (error) { document.getElementById("summary").textContent=`Refresh failed: ${error}`; }
-}
-async function refreshHealth() {
-  const el=document.getElementById("health");
-  try {
-    const response=await fetch("/api/health",{cache:"no-store"});
-    const data=await response.json();
-    el.textContent=data.ok?"yt-dlp ready · local merge enabled":"Service needs attention";
-    el.className=`health ${data.ok?"good":"bad"}`;
-  } catch (error) { el.textContent="Health check failed"; el.className="health bad"; }
-}
-const params=new URLSearchParams(location.search);
-const notice=document.getElementById("notice");
-if (params.has("queued")) { notice.textContent=`Queued job ${params.get("queued")}.`; notice.className="notice show ok"; }
-if (params.has("error")) { notice.textContent=params.get("error"); notice.className="notice show error"; }
-refreshJobs();
-refreshHealth();
-setInterval(refreshJobs,1500);
-setInterval(refreshHealth,30000);
+function setJobs(container,count,jobs,message){$(count).textContent=jobs.length;$(container).innerHTML=jobs.length?jobs.map(jobHtml).join(""):`<div class="empty">${esc(message)}</div>`;}
+function openLogIds(){return new Set([...document.querySelectorAll("article.job details[open]")].map(node=>node.closest("article.job")?.dataset.jobId).filter(Boolean));}
+function restoreLogs(ids){document.querySelectorAll("article.job").forEach(article=>{if(ids.has(article.dataset.jobId)){const details=article.querySelector("details");if(details)details.open=true;}});}
+async function refreshJobs(){try{const openIds=openLogIds(),response=await fetch("/api/jobs",{cache:"no-store"}),data=await response.json(),jobs=data.jobs||[];const active=jobs.filter(job=>["preparing","downloading","processing","moving"].includes(job.status)),queued=jobs.filter(job=>job.status==="queued").sort((a,b)=>(a.queue_position||9999)-(b.queue_position||9999)),recent=jobs.filter(job=>["completed","failed"].includes(job.status)).slice(0,12);setJobs("activeJobs","activeCount",active,"No active downloads");setJobs("queuedJobs","queuedCount",queued,"The queue is clear");setJobs("recentJobs","recentCount",recent,"Finished downloads appear here");restoreLogs(openIds);$("activeSummary").textContent=active.length?`${active.length} of {{ max_concurrent_downloads }} {{ "worker" if max_concurrent_downloads == 1 else "workers" }} busy`:"Workers are standing by";}catch(_){$("activeSummary").textContent="Could not refresh";}}
+async function refreshHealth(){try{const response=await fetch("/api/health",{cache:"no-store"}),data=await response.json(),health=$("health");health.className=`health ${data.ok?"good":"bad"}`;health.innerHTML=`<span>${data.ok?`YouTube NAS online · yt-dlp ${esc(data.yt_dlp_version||"")}`:(data.yt_dlp_error||"Storage or yt-dlp unavailable")}</span>`;health.title=data.yt_dlp_error||"";}catch(_){$("health").className="health bad";$("health").innerHTML="<span>Service unavailable</span>";}}
+const params=new URLSearchParams(location.search),notice=$("notice");if(params.has("queued")){notice.textContent=`Download ${params.get("queued")} added to the queue.`;notice.className="notice show ok";}if(params.has("error")){notice.textContent=params.get("error");notice.className="notice show error";}
+refreshJobs();refreshHealth();setInterval(refreshJobs,1500);setInterval(refreshHealth,30000);
 </script>
 </body>
 </html>

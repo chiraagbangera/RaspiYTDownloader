@@ -1,6 +1,9 @@
+import json
+import math
 import os
 import queue
 import re
+import shutil
 import subprocess
 import threading
 import uuid
@@ -15,13 +18,23 @@ app = Flask(__name__)
 APP_NAME = "YouTube Video Downloader"
 
 DOWNLOAD_DIR = Path(
-    os.environ.get("DOWNLOAD_DIR", "/mnt/nas/downloads")
+    os.environ.get(
+        "DOWNLOAD_DIR",
+        "/mnt/Videos/Youtube Videos",
+    )
 ).resolve()
 
 TEMP_DOWNLOAD_DIR = Path(
     os.environ.get(
         "TEMP_DOWNLOAD_DIR",
         "/var/tmp/ytdlp-web",
+    )
+).resolve()
+
+NAS_TEMP_DOWNLOAD_DIR = Path(
+    os.environ.get(
+        "NAS_TEMP_DOWNLOAD_DIR",
+        str(DOWNLOAD_DIR / ".ytdlp-temp"),
     )
 ).resolve()
 
@@ -38,6 +51,29 @@ MAX_CONCURRENT_DOWNLOADS = max(
 MAX_LOG_LINES = max(
     50,
     int(os.environ.get("MAX_LOG_LINES", "500")),
+)
+
+LOCAL_FREE_RESERVE_BYTES = max(
+    0,
+    int(
+        os.environ.get(
+            "LOCAL_FREE_RESERVE_BYTES",
+            str(512 * 1024 * 1024),
+        )
+    ),
+)
+
+# A merge can temporarily keep the video, audio, and completed output at the
+# same time. Reserve twice the estimated media size so the Pi is not filled by
+# post-processing after the initial download appeared to fit.
+LOCAL_SPACE_MULTIPLIER = max(
+    1.0,
+    float(os.environ.get("LOCAL_SPACE_MULTIPLIER", "2.0")),
+)
+
+YTDLP_ESTIMATE_TIMEOUT = max(
+    15,
+    int(os.environ.get("YTDLP_ESTIMATE_TIMEOUT", "120")),
 )
 
 # HDR:
@@ -59,6 +95,7 @@ FORMAT_SELECTOR = (
 jobs: dict[str, dict] = {}
 jobs_lock = threading.Lock()
 job_queue: queue.Queue[str] = queue.Queue()
+local_space_reservations: dict[str, int] = {}
 
 
 def utc_now() -> str:
@@ -113,7 +150,131 @@ def get_queue_position(job_id: str) -> int | None:
         return None
 
 
+def media_size_from_info(info: object) -> int | None:
+    """Return the selected media size from a yt-dlp JSON response."""
+    if not isinstance(info, dict):
+        return None
+
+    entries = info.get("entries")
+    if isinstance(entries, list):
+        if not entries:
+            return None
+        entry_sizes = [media_size_from_info(entry) for entry in entries]
+        if any(size is None for size in entry_sizes):
+            return None
+        return sum(size for size in entry_sizes if size is not None)
+
+    selected_formats = (
+        info.get("requested_downloads")
+        or info.get("requested_formats")
+    )
+    if isinstance(selected_formats, list) and selected_formats:
+        sizes: list[int] = []
+        for selected_format in selected_formats:
+            if not isinstance(selected_format, dict):
+                return None
+            size = (
+                selected_format.get("filesize")
+                or selected_format.get("filesize_approx")
+            )
+            if not isinstance(size, (int, float)) or size <= 0:
+                return None
+            sizes.append(int(size))
+        return sum(sizes)
+
+    size = info.get("filesize") or info.get("filesize_approx")
+    if isinstance(size, (int, float)) and size > 0:
+        return int(size)
+    return None
+
+
+def estimate_download_size(job: dict) -> tuple[int | None, str | None]:
+    """Ask yt-dlp for the selected formats without downloading media."""
+    command = [
+        YTDLP_BIN,
+        "--dump-single-json",
+        "--simulate",
+        "--no-warnings",
+        "--no-progress",
+        "--format",
+        FORMAT_SELECTOR,
+    ]
+    if not job["playlist"]:
+        command.append("--no-playlist")
+    command.append(job["url"])
+
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=YTDLP_ESTIMATE_TIMEOUT,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        append_log(job["id"], f"Could not estimate download size: {exc}")
+        return None, None
+
+    if result.returncode != 0:
+        error_line = result.stderr.strip().splitlines()
+        detail = error_line[-1] if error_line else "yt-dlp probe failed"
+        append_log(job["id"], f"Could not estimate download size: {detail}")
+        return None, None
+
+    try:
+        info = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError) as exc:
+        append_log(job["id"], f"Could not read download size estimate: {exc}")
+        return None, None
+
+    title = info.get("title") if isinstance(info, dict) else None
+    return media_size_from_info(info), title
+
+
+def reserve_local_space(job_id: str, estimated_bytes: int | None) -> bool:
+    """Atomically reserve enough Pi space for a download and its merge."""
+    if estimated_bytes is None:
+        return False
+
+    required_bytes = math.ceil(estimated_bytes * LOCAL_SPACE_MULTIPLIER)
+    try:
+        free_bytes = shutil.disk_usage(TEMP_DOWNLOAD_DIR).free
+    except OSError:
+        return False
+
+    with jobs_lock:
+        already_reserved = sum(local_space_reservations.values())
+        available_bytes = max(0, free_bytes - already_reserved)
+        if required_bytes + LOCAL_FREE_RESERVE_BYTES > available_bytes:
+            return False
+        local_space_reservations[job_id] = required_bytes
+    return True
+
+
+def release_local_space(job_id: str) -> None:
+    with jobs_lock:
+        local_space_reservations.pop(job_id, None)
+
+
+def select_working_directory(
+    job_id: str,
+    estimated_bytes: int | None,
+) -> tuple[Path, str]:
+    if reserve_local_space(job_id, estimated_bytes):
+        return TEMP_DOWNLOAD_DIR, "pi_local"
+    return NAS_TEMP_DOWNLOAD_DIR, "nas_direct"
+
+
+def download_message(job: dict) -> str:
+    if job.get("storage_mode") == "nas_direct":
+        return "Downloading directly to NAS storage"
+    return "Downloading to Pi temporary storage"
+
+
 def build_command(job: dict) -> list[str]:
+    working_directory = Path(
+        job.get("working_directory") or TEMP_DOWNLOAD_DIR
+    )
     command = [
         YTDLP_BIN,
         "--newline",
@@ -141,7 +302,7 @@ def build_command(job: dict) -> list[str]:
         "--paths",
         str(DOWNLOAD_DIR),
         "--paths",
-        f"temp:{TEMP_DOWNLOAD_DIR}",
+        f"temp:{working_directory}",
         "--output",
         "%(title).180B [%(id)s].%(ext)s",
     ]
@@ -164,10 +325,10 @@ def download_worker(worker_number: int) -> None:
                 if job is None:
                     continue
 
-                job["status"] = "downloading"
                 job["worker_number"] = worker_number
                 job["started_at"] = utc_now()
-                job["message"] = "Downloading to temporary storage"
+                job["status"] = "preparing"
+                job["message"] = "Checking video size and Pi storage"
 
             DOWNLOAD_DIR.mkdir(
                 parents=True,
@@ -177,6 +338,33 @@ def download_worker(worker_number: int) -> None:
                 parents=True,
                 exist_ok=True,
             )
+
+            estimated_bytes, probed_title = estimate_download_size(job)
+            working_directory, storage_mode = select_working_directory(
+                job_id,
+                estimated_bytes,
+            )
+            use_local_storage = storage_mode == "pi_local"
+            working_directory.mkdir(parents=True, exist_ok=True)
+
+            update_job(
+                job_id,
+                status="downloading",
+                message=(
+                    "Downloading to Pi temporary storage"
+                    if use_local_storage
+                    else "Downloading directly to NAS storage"
+                ),
+                estimated_bytes=estimated_bytes,
+                storage_mode=storage_mode,
+                working_directory=str(working_directory),
+                title=probed_title or job.get("title"),
+            )
+
+            with jobs_lock:
+                job = jobs.get(job_id)
+                if job is None:
+                    continue
 
             command = build_command(job)
 
@@ -218,7 +406,7 @@ def download_worker(worker_number: int) -> None:
                     update_job(
                         job_id,
                         status="downloading",
-                        message="Downloading to temporary storage",
+                        message=download_message(job),
                         progress=min(100.0, max(0.0, progress)),
                         downloaded_size=parts[2].strip() if len(parts) > 2 else "",
                         total_size=parts[3].strip() if len(parts) > 3 else "",
@@ -246,13 +434,21 @@ def download_worker(worker_number: int) -> None:
                     update_job(
                         job_id,
                         status="moving",
-                        message="Moving completed file to NAS",
+                        message=(
+                            "Moving completed file to NAS"
+                            if job.get("storage_mode") == "pi_local"
+                            else "Organizing completed file on NAS"
+                        ),
                     )
                 elif stripped.startswith(("[Merger]", "[VideoRemuxer]", "[Fixup")):
                     update_job(
                         job_id,
                         status="processing",
-                        message="Merging and processing locally",
+                        message=(
+                            "Merging and processing on the Pi"
+                            if job.get("storage_mode") == "pi_local"
+                            else "Merging and processing directly on the NAS"
+                        ),
                     )
 
             return_code = process.wait()
@@ -293,6 +489,7 @@ def download_worker(worker_number: int) -> None:
                     current_job["process_id"] = None
 
         finally:
+            release_local_space(job_id)
             job_queue.task_done()
 
 
@@ -311,7 +508,44 @@ def start_workers() -> None:
         thread.start()
 
 
+def prepare_directories() -> None:
+    """Create the Pi workspace and the NAS YouTube library on startup."""
+    for directory in (TEMP_DOWNLOAD_DIR, DOWNLOAD_DIR):
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # Keep the status page available so it can explain an unavailable
+            # or read-only mount. A queued job will report the exact error.
+            pass
+
+
+prepare_directories()
 start_workers()
+
+
+def check_ytdlp_health() -> tuple[bool, str | None, str | None]:
+    if not Path(YTDLP_BIN).exists():
+        return False, None, "yt-dlp executable was not found"
+    try:
+        result = subprocess.run(
+            [YTDLP_BIN, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, None, str(exc)
+
+    version = result.stdout.strip().splitlines()
+    if result.returncode == 0 and version:
+        return True, version[0], None
+
+    error_lines = (result.stderr or result.stdout).strip().splitlines()
+    error = error_lines[-1] if error_lines else (
+        f"yt-dlp exited with code {result.returncode}"
+    )
+    return False, None, error
 
 
 @app.get("/")
@@ -333,7 +567,9 @@ def index():
         jobs=recent_jobs,
         download_dir=str(DOWNLOAD_DIR),
         temp_download_dir=str(TEMP_DOWNLOAD_DIR),
+        nas_temp_download_dir=str(NAS_TEMP_DOWNLOAD_DIR),
         max_concurrent_downloads=MAX_CONCURRENT_DOWNLOADS,
+        local_space_multiplier=LOCAL_SPACE_MULTIPLIER,
     )
 
 
@@ -353,7 +589,9 @@ def download():
                 jobs=recent_jobs,
                 download_dir=str(DOWNLOAD_DIR),
                 temp_download_dir=str(TEMP_DOWNLOAD_DIR),
+                nas_temp_download_dir=str(NAS_TEMP_DOWNLOAD_DIR),
                 max_concurrent_downloads=MAX_CONCURRENT_DOWNLOADS,
+                local_space_multiplier=LOCAL_SPACE_MULTIPLIER,
                 error=(
                     "Enter a valid http:// or https:// URL."
                 ),
@@ -383,6 +621,9 @@ def download():
         "eta": "",
         "output_path": None,
         "output_bytes": None,
+        "estimated_bytes": None,
+        "storage_mode": None,
+        "working_directory": None,
         "log": [],
     }
 
@@ -457,6 +698,7 @@ def all_jobs():
                 MAX_CONCURRENT_DOWNLOADS,
             "download_dir": str(DOWNLOAD_DIR),
             "temp_download_dir": str(TEMP_DOWNLOAD_DIR),
+            "nas_temp_download_dir": str(NAS_TEMP_DOWNLOAD_DIR),
             "jobs": result,
         }
     )
@@ -465,14 +707,26 @@ def all_jobs():
 @app.get("/api/health")
 def health():
     ytdlp_exists = Path(YTDLP_BIN).exists()
+    ytdlp_ok, ytdlp_version, ytdlp_error = check_ytdlp_health()
+    download_dir_exists = DOWNLOAD_DIR.exists()
+    download_dir_writable = (
+        download_dir_exists
+        and os.access(DOWNLOAD_DIR, os.W_OK)
+    )
 
     return jsonify(
         {
-            "ok": ytdlp_exists,
+            "ok": ytdlp_ok and download_dir_writable,
             "yt_dlp": YTDLP_BIN,
             "yt_dlp_exists": ytdlp_exists,
+            "yt_dlp_ok": ytdlp_ok,
+            "yt_dlp_version": ytdlp_version,
+            "yt_dlp_error": ytdlp_error,
             "download_dir": str(DOWNLOAD_DIR),
+            "download_dir_exists": download_dir_exists,
+            "download_dir_writable": download_dir_writable,
             "temp_download_dir": str(TEMP_DOWNLOAD_DIR),
+            "nas_temp_download_dir": str(NAS_TEMP_DOWNLOAD_DIR),
         }
     )
 
